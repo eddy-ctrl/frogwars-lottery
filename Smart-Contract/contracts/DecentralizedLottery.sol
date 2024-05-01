@@ -195,7 +195,7 @@ contract DecentralizedLottery is KeeperCompatibleInterface, DecentralizedLottery
         bool isOpen = (_LotteryState == LotteryState.OPEN);
         bool timePassed = ((block.timestamp - lastTimeStamp) > interval);
         bool hasPlayers = (allPlayers.length > 0);
-        bool hasBalance = address(this).balance > 0;
+        bool hasBalance = entranceToken.balanceOf(address(this)) > 0;
         upkeepNeeded = (isOpen && timePassed && hasPlayers && hasBalance);
         return (upkeepNeeded, "0x0");
     }
@@ -203,7 +203,7 @@ contract DecentralizedLottery is KeeperCompatibleInterface, DecentralizedLottery
     // Pick a random number;
     function performUpkeep(
         bytes calldata /* performData */
-    ) external override {
+    ) external override onlyAdmin {
         (bool upkeepNeeded, ) = checkUpkeep("");
         if (!upkeepNeeded) {
             revert Lottery__UpKeepNotNeeded(

@@ -22,9 +22,9 @@ const networkConfig = {
   // https://docs.chain.link/vrf/v2/subscription/supported-networks#polygon-matic-mainnet
   137: {
     name: "polygon",
-    vrfCoordinatorV2: "0xAE975071Be8F8eE67addBC1A82488F1C24858067",
-    gasLane: "0xcc294a196eeeb44da2888d17c0625cc88d70d9760a69d58d853ba6581a9ab0cd",
-    subscriptionId: "67424379512663932332268623715423188826394628625772023051424377045293146648356",
+    vrfCoordinatorV2_5: "0xec0Ed46f36576541C75739E915ADbCb3DE24bD77",
+    gasLane: "0x719ed7d7664abc3001c18aac8130a2265e1e70b7e036ae20f3ca8b92b3154d86",
+    subscriptionId: "0x9510d8aff251c51d5eb9e439c88ec174dd30e86d4a4ee5eb6d73c6be38bd2f24",
     callbackGasLimit: "500000",
   },
   // Linea Mainnet

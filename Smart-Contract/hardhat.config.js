@@ -7,10 +7,15 @@ require("hardhat-gas-reporter")
 require("hardhat-contract-sizer")
 require("dotenv").config()
 
-const RINKEBY_RPC_URL = process.env.RINKEBY_RPC_URL;
-const PRIVATE_KEY = process.env.PRIVATE_KEY;
+const POLYGON_RPC_URL = process.env.POLYGON_RPC_URL;
+const POLYGON_PRIVATE_KEY = process.env.POLYGON_PRIVATE_KEY;
+const POLYGONSCAN_API_KEY = process.env.POLYGONSCAN_API_KEY;
+
+const LINEA_RPC_URL = process.env.LINEA_RPC_URL;
+const LINEA_PRIVATE_KEY = process.env.LINEA_PRIVATE_KEY;
+const LINEASCAN_API_KEY = process.env.LINEASCAN_API_KEY;
+
 const COINMARKETCAP_API_KEY = process.env.COINMARKETCAP_API_KEY;
-const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY;
 
 module.exports = {
   defaultNetwork: "hardhat",
@@ -20,17 +25,36 @@ module.exports = {
       blockConfirmations: 1
     },
     linea: {
-      url: RINKEBY_RPC_URL,
-      accounts: [PRIVATE_KEY],
-      chainId: 4,
-      blockConfirmations: 6,
+      url: LINEA_RPC_URL,
+      accounts: [LINEA_PRIVATE_KEY],
+      chainId: 59144,
+      blockConfirmations: 1,
+      verify: {
+        etherscan: {
+          apiUrl: 'https://api.lineascan.build/',
+          apiKey: LINEASCAN_API_KEY
+        }
+      }
+    },
+    polygon: {
+      url: POLYGON_RPC_URL,
+      accounts: [POLYGON_PRIVATE_KEY],
+      chainId: 137,
+      blockConfirmations: 1,
+      verify: {
+        etherscan: {
+          apiUrl: 'https://api.polygonscan.com/',
+          apiKey: POLYGONSCAN_API_KEY
+        }
+      }
     }
   },
-  etherscan: {
+  /*etherscan: {
     apiKey: {
-        linea: ETHERSCAN_API_KEY,
-    },
-},
+          linea: LINEASCAN_API_KEY,
+          polygon: POLYGONSCAN_API_KEY
+      },
+  },*/
   gasReporter: {
     enabled: false, 
     currency: "USD",

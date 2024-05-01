@@ -22,8 +22,8 @@ contract WinnerAnnouncer is VRFConsumerBaseV2Plus, AccessControl {
 
     // Variables for chainlink random number function;
     bytes32 private immutable keyHash;
-    uint256 private immutable subscriptionId;
-    uint32 private immutable callbackGasLimit;
+    uint256 public subscriptionId;
+    uint32 public callbackGasLimit;
     uint32 private constant NO_OF_WORDS = 1;
     uint16 private constant REQUEST_CONFIRMATIONS = 3;
 
@@ -35,6 +35,10 @@ contract WinnerAnnouncer is VRFConsumerBaseV2Plus, AccessControl {
 
     // Events
     event randomNumberPick(uint256 indexed requestId);
+    event pickedRandomNumber(uint256 randomWord);
+
+    // Testing
+    bool public callOracle;
 
     // Modifiers
 
@@ -47,13 +51,15 @@ contract WinnerAnnouncer is VRFConsumerBaseV2Plus, AccessControl {
     constructor(
         address vrfCoordinatorV2,
         bytes32 _keyHash,
-        uint64 _subscriptionId,
+        uint256 _subscriptionId,
         uint32 _callbackGasLimit
     ) VRFConsumerBaseV2Plus(vrfCoordinatorV2) {
         i_vrfCoordinator = IVRFCoordinatorV2Plus(vrfCoordinatorV2);
         keyHash = _keyHash;
         subscriptionId = _subscriptionId;
         callbackGasLimit = _callbackGasLimit;
+
+        callOracle = false;
 
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
@@ -92,6 +98,18 @@ contract WinnerAnnouncer is VRFConsumerBaseV2Plus, AccessControl {
         ExecutionFee = fee_;
     }
 
+    function setSubscriptionId(uint256 subId_) external onlyAdmin {
+        subscriptionId = subId_;
+    }
+
+    function setCallbackLimit(uint32 callbackLimit_) external onlyAdmin {
+        callbackGasLimit = callbackLimit_;
+    }
+
+    function setCallOracle() external onlyAdmin {
+        callOracle = true;
+    }
+
     function addChainSupport(
         uint256 _trustedChain,
         address _trustedAddress
@@ -123,8 +141,20 @@ contract WinnerAnnouncer is VRFConsumerBaseV2Plus, AccessControl {
         uint256, /*requestId*/
         uint256[] memory randomWords
     ) internal override {
+        if (callOracle) {
+            bytes memory dstTxCall = _encodeReceiveCommand(randomWords[0]);
 
-        bytes memory dstTxCall = _encodeReceiveCommand(randomWords[0]);
+            // send the random word to the DecentralizedLottery
+            _send(dstTxCall, ExecutionFee);
+        } else {
+            emit pickedRandomNumber(randomWords[0]);
+        }
+    }
+
+    function announceWinner(uint256 randomWord_) external onlyAdmin {
+        require(!callOracle, "only by chainlink oracle");
+
+        bytes memory dstTxCall = _encodeReceiveCommand(randomWord_);
 
         // send the random word to the DecentralizedLottery
         _send(dstTxCall, ExecutionFee);
