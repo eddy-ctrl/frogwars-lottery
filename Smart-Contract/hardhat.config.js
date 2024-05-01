@@ -1,3 +1,4 @@
+require("@debridge-finance/hardhat-debridge");
 require("@nomiclabs/hardhat-waffle")
 require("@nomiclabs/hardhat-etherscan")
 require("hardhat-deploy")

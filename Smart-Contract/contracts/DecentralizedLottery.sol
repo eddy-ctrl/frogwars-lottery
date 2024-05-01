@@ -3,11 +3,15 @@
 pragma solidity ^0.8.7;
 
 // Imports
-import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
-import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/KeeperCompatibleInterface.sol";
+import "./DecentralizedLotteryInterface.sol";
+import "@debridge-finance/debridge-protocol-evm-interfaces/contracts/interfaces/IDeBridgeGate.sol";
+import "@debridge-finance/debridge-protocol-evm-interfaces/contracts/interfaces/IDeBridgeGateExtended.sol";
+import "@debridge-finance/debridge-protocol-evm-interfaces/contracts/interfaces/ICallProxy.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
 
 // Custom errors
+error AdminBadRole();
 error Lottery__NotEnoughEthEntered();
 error Lottery__TransferToWinnerFailed();
 error Lottery__NotOpen();
@@ -18,7 +22,7 @@ error Lottery__UpKeepNotNeeded(
 );
 
 // Contract
-contract DecentralizedLottery is VRFConsumerBaseV2, KeeperCompatibleInterface {
+contract DecentralizedLottery is KeeperCompatibleInterface, DecentralizedLotteryInterface, AccessControl {
     // State Variables
     uint256 private immutable entranceFee; // Fee to get one lottery ticket.
     uint256 private lastTimeStamp;
@@ -27,20 +31,6 @@ contract DecentralizedLottery is VRFConsumerBaseV2, KeeperCompatibleInterface {
     address private recentWinner; // The most recent winner
     address payable[] private allPlayers;
 
-    VRFCoordinatorV2Interface private immutable i_vrfCoordinator;
-
-    // Variables for chainlink random number function;
-    bytes32 private immutable gasLane;
-    uint64 private immutable subscriptionId;
-    uint32 private immutable callbackGasLimit;
-    uint32 private constant NO_OF_WORDS = 1;
-    uint16 private constant REQUEST_CONFIRMATIONS = 3;
-
-    // Enums
-    enum LotteryState {
-        OPEN,
-        CALCULATING
-    }
     LotteryState private _LotteryState;
 
     // Events
@@ -48,23 +38,22 @@ contract DecentralizedLottery is VRFConsumerBaseV2, KeeperCompatibleInterface {
     event randomNumberPick(uint256 indexed requestId);
     event winnerPicked(address indexed recentWinner);
 
+    // Cross-chain
+    uint256 public AnnouncerChainID;
+    address public AnnouncerAddress;
+    IDeBridgeGateExtended public deBridgeGate;
+
     //    Constructor
     constructor(
-        address vrfCoordinatorV2,
         uint256 _entranceFee,
-        bytes32 _gasLane,
-        uint64 _subscriptionId,
-        uint32 _callbackGasLimit,
         uint256 _interval
-    ) VRFConsumerBaseV2(vrfCoordinatorV2) {
+    ) {
         entranceFee = _entranceFee;
-        i_vrfCoordinator = VRFCoordinatorV2Interface(vrfCoordinatorV2);
-        gasLane = _gasLane;
-        subscriptionId = _subscriptionId;
-        callbackGasLimit = _callbackGasLimit;
         _LotteryState = LotteryState.OPEN;
         lastTimeStamp = block.timestamp;
         interval = _interval;
+
+        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
     // Modifiers
@@ -76,57 +65,87 @@ contract DecentralizedLottery is VRFConsumerBaseV2, KeeperCompatibleInterface {
         _;
     }
 
+    // Modifiers
+    modifier onlyCrossChain {
+        // take the callProxy instance
+        ICallProxy callProxy = ICallProxy(deBridgeGate.callProxy());
+
+        // caller must be CallProxy
+        require(address(callProxy) == msg.sender);
+
+        // origin chain must be known
+        require(callProxy.submissionChainIdFrom() == AnnouncerChainID);
+
+        // native sender (initiator of the txn on the origin chain) must be trusted
+        // Bytes can't be compared directly, so take the hashes of them
+        require(
+            keccak256(callProxy.submissionNativeSender())
+            == keccak256(abi.encodePacked(AnnouncerAddress))
+        );
+
+        // execute the rest
+        _;
+    }
+
+    modifier onlyAdmin() {
+        if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) revert AdminBadRole();
+        _;
+    }
+
     // View Functions
 
     // get entrance fee.
-    function getEntranceFee() public view returns (uint256) {
+    function getEntranceFee() public override view returns (uint256) {
         return entranceFee;
     }
 
     // Get player
-    function getPlayer(uint256 index) public view returns (address) {
+    function getPlayer(uint256 index) public override view returns (address) {
         return allPlayers[index];
     }
 
     // Get Recent Winner
-    function getRecentWinner() public view returns (address) {
+    function getRecentWinner() public override view returns (address) {
         return recentWinner;
     }
 
     // Get Lottery State
-    function getLotteryState() public view returns (LotteryState) {
+    function getLotteryState() public override view returns (LotteryState) {
         return _LotteryState;
     }
 
     // Get Numbers of players
-    function getNumbersOfPlayers() public view returns (uint256) {
+    function getNumbersOfPlayers() public override view returns (uint256) {
         return allPlayers.length;
     }
 
     // Get last block timestamp
-    function getLastTimeStamp() public view returns (uint256) {
+    function getLastTimeStamp() public override view returns (uint256) {
         return lastTimeStamp;
     }
 
-    // Get Num Words
-    function getNumWords() public pure returns (uint256) {
-        return NO_OF_WORDS;
-    }
-
     // Get Interval
-    function getInterval() public view returns (uint256) {
+    function getInterval() public override view returns (uint256) {
         return interval;
-    }
-
-    // Get Request confirmations
-    function getRequestConfirmations() public pure returns (uint256) {
-        return REQUEST_CONFIRMATIONS;
     }
 
     // Functions
 
+    function setDeBridgeGate(IDeBridgeGateExtended deBridgeGate_) external onlyAdmin
+    {
+        deBridgeGate = deBridgeGate_;
+    }
+
+    function addChainSupport(
+        uint256 _trustedChain,
+        address _trustedAddress
+    ) external onlyAdmin {
+        AnnouncerChainID = _trustedChain;
+        AnnouncerAddress = _trustedAddress;
+    }
+
     // Enter the lottery ticket.
-    function enterLottery() public payable notEnoughEthEntered {
+    function enterLottery() external payable notEnoughEthEntered override {
         if (_LotteryState != LotteryState.OPEN) {
             revert Lottery__NotOpen();
         }
@@ -169,23 +188,15 @@ contract DecentralizedLottery is VRFConsumerBaseV2, KeeperCompatibleInterface {
         }
 
         _LotteryState = LotteryState.CALCULATING;
-        uint256 requestId = i_vrfCoordinator.requestRandomWords(
-            gasLane,
-            subscriptionId,
-            REQUEST_CONFIRMATIONS,
-            callbackGasLimit,
-            NO_OF_WORDS
-        );
-
-        // Emitting event
-        emit randomNumberPick(requestId);
+        // Now you may call the winner announcer
     }
 
-    function fulfillRandomWords(
-        uint256, /*requestId*/
-        uint256[] memory randomWords
-    ) internal override {
-        uint256 index = randomWords[0] % allPlayers.length;
+    function receiveRandomWord(
+        uint256 randomWord
+    ) external override onlyCrossChain {
+        require(_LotteryState == LotteryState.CALCULATING, "required performUpkeep()");
+
+        uint256 index = randomWord % allPlayers.length;
         address payable _recentWinner = allPlayers[index];
         recentWinner = _recentWinner;
         (bool success, ) = recentWinner.call{value: address(this).balance}("");
