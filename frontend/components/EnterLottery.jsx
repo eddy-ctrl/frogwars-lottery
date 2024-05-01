@@ -6,6 +6,7 @@ import { Loading, useNotification } from "web3uikit";
 
 export default function EnterLottery() {
   const [entranceFee, setEntranceFee] = useState();
+  const [lotteryNotOpen, setLotteryNotOpen] = useState(false);
   const [recentWinner, setRecentWinner] = useState();
   const [allPlayers, setAllPlayers] = useState();
   const [loading, setLoading] = useState(false);
@@ -52,6 +53,13 @@ export default function EnterLottery() {
     params: {},
   });
 
+  const { runContractFunction: getLotteryState } = useWeb3Contract({
+    abi,
+    contractAddress: lotteryAddress,
+    functionName: "getLotteryState",
+    params: {},
+  });
+
   const handleClick = async () => {
     setBtnLoading(true);
     await enterLottery({
@@ -84,9 +92,12 @@ export default function EnterLottery() {
         const getFee = (await getEntranceFee()).toString();
         const getNumOfPlayers = (await getNumbersOfPlayers()).toString();
         const getWinner = await getRecentWinner();
+        const getState = await getLotteryState();
         setEntranceFee(getFee);
         setAllPlayers(getNumOfPlayers);
         setRecentWinner(getWinner);
+        console.log(`State is: ${getState}. Closed? ${(getState != 1)}`);
+        setLotteryNotOpen(getState != 1);
       };
       getAll();
     }
@@ -99,7 +110,7 @@ export default function EnterLottery() {
           <p className=" text-[50px] text-blue-500 font-bold text-center space-x-5">
             Entrance Fee =
             <span className="text-green-500 px-5">
-              {entranceFee && ethers.utils.formatUnits(entranceFee, "ether")} Ether
+              {entranceFee && ethers.utils.formatUnits(entranceFee, "ether")} CRYSTAL
             </span>
           </p>
           <p className="text-4xl text-gray-300 font-semibold text-center">Players = <span className="text-blue-500">
@@ -113,7 +124,7 @@ export default function EnterLottery() {
           <div className="text-center">
             <button
               className="cursor-pointer mt-12 w-40 h-10 px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700"
-              disabled={isFetching || isLoading || loading || btnLoading}
+              disabled={isFetching || isLoading || loading || btnLoading || lotteryNotOpen}
               onClick={handleClick}
             >
               {btnLoading || isLoading || isFetching ? (
@@ -121,7 +132,7 @@ export default function EnterLottery() {
                   <Loading fontSize={20} direction="right" spinnerType="wave" />
                 </div>
               ) : (
-                <div>Enter Lottery</div>
+                <div>{lotteryNotOpen ? "Lottery Not Open" : "Enter Lottery"}</div>
               )}
             </button>
           </div>
