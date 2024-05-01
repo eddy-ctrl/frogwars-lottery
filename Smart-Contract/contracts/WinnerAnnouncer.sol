@@ -4,24 +4,25 @@ pragma solidity ^0.8.7;
 
 // Imports
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
-import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
+import {IVRFCoordinatorV2Plus} from "@chainlink/contracts/src/v0.8/vrf/dev/interfaces/IVRFCoordinatorV2Plus.sol";
+import {VRFConsumerBaseV2Plus} from "@chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
+import {VRFV2PlusClient} from "@chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
 import "@debridge-finance/debridge-protocol-evm-interfaces/contracts/interfaces/IDeBridgeGate.sol";
 import "@debridge-finance/debridge-protocol-evm-interfaces/contracts/interfaces/IDeBridgeGateExtended.sol";
 import "@debridge-finance/debridge-protocol-evm-interfaces/contracts/interfaces/ICallProxy.sol";
-import "./WinnerAnnouncerInterface.sol";
+import "@debridge-finance/debridge-protocol-evm-interfaces/contracts/libraries/Flags.sol";
 import "./DecentralizedLotteryInterface.sol";
 
 error AdminBadRole();
 
 // Contract
-contract WinnerAnnouncer is VRFConsumerBaseV2, AccessControl, WinnerAnnouncerInterface {
-    VRFCoordinatorV2Interface private immutable i_vrfCoordinator;
+contract WinnerAnnouncer is VRFConsumerBaseV2Plus, AccessControl {
+    IVRFCoordinatorV2Plus private immutable i_vrfCoordinator;
     IDeBridgeGateExtended public deBridgeGate;
 
     // Variables for chainlink random number function;
-    bytes32 private immutable gasLane;
-    uint64 private immutable subscriptionId;
+    bytes32 private immutable keyHash;
+    uint256 private immutable subscriptionId;
     uint32 private immutable callbackGasLimit;
     uint32 private constant NO_OF_WORDS = 1;
     uint16 private constant REQUEST_CONFIRMATIONS = 3;
@@ -30,6 +31,7 @@ contract WinnerAnnouncer is VRFConsumerBaseV2, AccessControl, WinnerAnnouncerInt
     uint256 public LotteryChainID;
     address public LotteryAddress;
     uint256 public ExecutionFee;
+    uint256 public requestId;
 
     // Events
     event randomNumberPick(uint256 indexed requestId);
@@ -44,12 +46,12 @@ contract WinnerAnnouncer is VRFConsumerBaseV2, AccessControl, WinnerAnnouncerInt
     //    Constructor
     constructor(
         address vrfCoordinatorV2,
-        bytes32 _gasLane,
+        bytes32 _keyHash,
         uint64 _subscriptionId,
         uint32 _callbackGasLimit
-    ) VRFConsumerBaseV2(vrfCoordinatorV2) {
-        i_vrfCoordinator = VRFCoordinatorV2Interface(vrfCoordinatorV2);
-        gasLane = _gasLane;
+    ) VRFConsumerBaseV2Plus(vrfCoordinatorV2) {
+        i_vrfCoordinator = IVRFCoordinatorV2Plus(vrfCoordinatorV2);
+        keyHash = _keyHash;
         subscriptionId = _subscriptionId;
         callbackGasLimit = _callbackGasLimit;
 
@@ -99,14 +101,18 @@ contract WinnerAnnouncer is VRFConsumerBaseV2, AccessControl, WinnerAnnouncerInt
     }
 
     // Pick a random number;
-    // TODO This function is called by the DecentralizedLottery on Linea Chain
-    function requestRandomWinner() external override payable {
-        uint256 requestId = i_vrfCoordinator.requestRandomWords(
-            gasLane,
-            subscriptionId,
-            REQUEST_CONFIRMATIONS,
-            callbackGasLimit,
-            NO_OF_WORDS
+    function requestRandomWinner() external payable onlyAdmin {
+        requestId = i_vrfCoordinator.requestRandomWords(
+            VRFV2PlusClient.RandomWordsRequest({
+                keyHash: keyHash,
+                subId: subscriptionId,
+                requestConfirmations: REQUEST_CONFIRMATIONS,
+                callbackGasLimit: callbackGasLimit,
+                numWords: NO_OF_WORDS,
+                extraArgs: VRFV2PlusClient._argsToBytes(
+                    VRFV2PlusClient.ExtraArgsV1({nativePayment: false})
+                )
+            })
         );
 
         // Emitting event
@@ -178,5 +184,11 @@ contract WinnerAnnouncer is VRFConsumerBaseV2, AccessControl, WinnerAnnouncerInt
             0, // _referralCode
             abi.encode(autoParams) // _autoParams
         );
+    }
+
+    receive() external payable {}
+
+    function withdrawBalance() external onlyAdmin {
+        payable(msg.sender).transfer(address(this).balance);
     }
 }

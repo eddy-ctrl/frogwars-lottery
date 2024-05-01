@@ -3,17 +3,20 @@
 pragma solidity ^0.8.7;
 
 // Imports
-import "@chainlink/contracts/src/v0.8/interfaces/KeeperCompatibleInterface.sol";
+import "@chainlink/contracts/src/v0.8/automation/interfaces/KeeperCompatibleInterface.sol";
 import "./DecentralizedLotteryInterface.sol";
 import "@debridge-finance/debridge-protocol-evm-interfaces/contracts/interfaces/IDeBridgeGate.sol";
 import "@debridge-finance/debridge-protocol-evm-interfaces/contracts/interfaces/IDeBridgeGateExtended.sol";
 import "@debridge-finance/debridge-protocol-evm-interfaces/contracts/interfaces/ICallProxy.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // Custom errors
 error AdminBadRole();
-error Lottery__NotEnoughEthEntered();
+error Lottery__NotEnoughBidEntered();
+error Lottery__NotEnoughAllowanceEntered();
 error Lottery__TransferToWinnerFailed();
+error Lottery__BurnFailed();
 error Lottery__NotOpen();
 error Lottery__UpKeepNotNeeded(
     uint256 currentBalance,
@@ -24,18 +27,19 @@ error Lottery__UpKeepNotNeeded(
 // Contract
 contract DecentralizedLottery is KeeperCompatibleInterface, DecentralizedLotteryInterface, AccessControl {
     // State Variables
-    uint256 private immutable entranceFee; // Fee to get one lottery ticket.
+    uint256 private entranceFee; // Fee to get one lottery ticket.
+    IERC20 private entranceToken;
     uint256 private lastTimeStamp;
-    uint256 private immutable interval;
+    uint256 private interval;
 
     address private recentWinner; // The most recent winner
-    address payable[] private allPlayers;
+    address[] private allPlayers;
+    address public burner;
 
     LotteryState private _LotteryState;
 
     // Events
     event lotteryEnter(address indexed player);
-    event randomNumberPick(uint256 indexed requestId);
     event winnerPicked(address indexed recentWinner);
 
     // Cross-chain
@@ -43,46 +47,52 @@ contract DecentralizedLottery is KeeperCompatibleInterface, DecentralizedLottery
     address public AnnouncerAddress;
     IDeBridgeGateExtended public deBridgeGate;
 
-    //    Constructor
-    constructor(
-        uint256 _entranceFee,
-        uint256 _interval
-    ) {
-        entranceFee = _entranceFee;
-        _LotteryState = LotteryState.OPEN;
-        lastTimeStamp = block.timestamp;
-        interval = _interval;
+    bool public allowTestRandomness;
 
+    //    Constructor
+    constructor(address _entranceToken) {
+        entranceToken = IERC20(_entranceToken);
+        _LotteryState = LotteryState.CLOSED;
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        allowTestRandomness = true;
+        burner = msg.sender;
     }
 
     // Modifiers
     // The entered value is less then the entrance fee.
-    modifier notEnoughEthEntered() {
-        if (msg.value < entranceFee) {
-            revert Lottery__NotEnoughEthEntered();
+    modifier notEnoughBidEntered() {
+        uint256 userBalance = entranceToken.balanceOf(msg.sender);
+        if (userBalance < entranceFee) {
+            revert Lottery__NotEnoughBidEntered();
         }
+
+        uint256 allowance = entranceToken.allowance(msg.sender, address(this));
+        if (allowance < entranceFee) {
+            revert Lottery__NotEnoughAllowanceEntered();
+        }
+
         _;
     }
 
     // Modifiers
     modifier onlyCrossChain {
-        // take the callProxy instance
-        ICallProxy callProxy = ICallProxy(deBridgeGate.callProxy());
+        if (!allowTestRandomness) {
+            // take the callProxy instance
+            ICallProxy callProxy = ICallProxy(deBridgeGate.callProxy());
 
-        // caller must be CallProxy
-        require(address(callProxy) == msg.sender);
+            // caller must be CallProxy
+            require(address(callProxy) == msg.sender);
 
-        // origin chain must be known
-        require(callProxy.submissionChainIdFrom() == AnnouncerChainID);
+            // origin chain must be known
+            require(callProxy.submissionChainIdFrom() == AnnouncerChainID);
 
-        // native sender (initiator of the txn on the origin chain) must be trusted
-        // Bytes can't be compared directly, so take the hashes of them
-        require(
-            keccak256(callProxy.submissionNativeSender())
-            == keccak256(abi.encodePacked(AnnouncerAddress))
-        );
-
+            // native sender (initiator of the txn on the origin chain) must be trusted
+            // Bytes can't be compared directly, so take the hashes of them
+            require(
+                keccak256(callProxy.submissionNativeSender())
+                == keccak256(abi.encodePacked(AnnouncerAddress))
+            );
+        }
         // execute the rest
         _;
     }
@@ -131,9 +141,23 @@ contract DecentralizedLottery is KeeperCompatibleInterface, DecentralizedLottery
 
     // Functions
 
+    // Call this function only after testing the bridge and randomness.
+    function disallowTestRandomness() external onlyAdmin {
+        allowTestRandomness = false;
+    }
+
     function setDeBridgeGate(IDeBridgeGateExtended deBridgeGate_) external onlyAdmin
     {
         deBridgeGate = deBridgeGate_;
+    }
+
+    function setEntranceFee(uint256 fee_) external onlyAdmin
+    {
+        entranceFee = fee_;
+    }
+
+    function setBurner() external onlyAdmin {
+        burner = msg.sender;
     }
 
     function addChainSupport(
@@ -145,11 +169,13 @@ contract DecentralizedLottery is KeeperCompatibleInterface, DecentralizedLottery
     }
 
     // Enter the lottery ticket.
-    function enterLottery() external payable notEnoughEthEntered override {
+    function enterLottery() external notEnoughBidEntered override {
         if (_LotteryState != LotteryState.OPEN) {
             revert Lottery__NotOpen();
         }
-        allPlayers.push(payable(msg.sender));
+        bool transferred = entranceToken.transferFrom(msg.sender, address(this), entranceFee);
+        require(transferred, "failed to take fee");
+        allPlayers.push(msg.sender);
 
         //   Emitting events
         emit lotteryEnter(msg.sender);
@@ -197,15 +223,35 @@ contract DecentralizedLottery is KeeperCompatibleInterface, DecentralizedLottery
         require(_LotteryState == LotteryState.CALCULATING, "required performUpkeep()");
 
         uint256 index = randomWord % allPlayers.length;
-        address payable _recentWinner = allPlayers[index];
+        address _recentWinner = allPlayers[index];
         recentWinner = _recentWinner;
-        (bool success, ) = recentWinner.call{value: address(this).balance}("");
+
+        uint256 amount = entranceToken.balanceOf(address(this));
+        uint256 winnerAmount = amount / 10 * 5;
+        uint256 poolAmount = amount/ 10 * 3;
+        uint256 burnAmount = amount - (winnerAmount + poolAmount);
+
+        bool success = entranceToken.transfer(recentWinner, winnerAmount);
         if (!success) {
             revert Lottery__TransferToWinnerFailed();
         }
+        success = entranceToken.transfer(burner, burnAmount);
+        if (!success) {
+            revert Lottery__BurnFailed();
+        }
+
         emit winnerPicked(recentWinner);
-        _LotteryState = LotteryState.OPEN;
-        allPlayers = new address payable[](0);
+        _LotteryState = LotteryState.CLOSED;
+        allPlayers = new address[](0);
         lastTimeStamp = block.timestamp;
+    }
+
+    function startSession(uint256 _entranceFee, uint256 _interval) external onlyAdmin {
+        require(_LotteryState == LotteryState.CLOSED, "can't start a session");
+
+        entranceFee = _entranceFee;
+        _LotteryState = LotteryState.OPEN;
+        lastTimeStamp = block.timestamp;
+        interval = _interval;
     }
 }

@@ -11,9 +11,19 @@ module.exports = async function ({ getNamedAccounts, deployments }) {
   const { deploy, log } = deployments;
   const { deployer } = await getNamedAccounts();
   const chainId = network.config.chainId;
+  let vrfCoordinatorV2Address, subscriptionId;
 
-  const args = ["0x21d624c846725abe1e1e7d662e9fb274999009aa"];
-  const DecentralizedLottery = await deploy("DecentralizedLottery", {
+
+  vrfCoordinatorV2_5Address = networkConfig[chainId]["vrfCoordinatorV2_5"];
+  subscriptionId = networkConfig[chainId]["subscriptionId"];
+
+  const entranceFee = networkConfig[chainId]["entranceFee"];
+  const gasLane = networkConfig[chainId]["gasLane"];
+  const callbackGasLimit = networkConfig[chainId]["callbackGasLimit"];
+  const interval = networkConfig[chainId]["interval"];
+
+  const args = [vrfCoordinatorV2_5Address, gasLane, subscriptionId, callbackGasLimit];
+  const DecentralizedLottery = await deploy("WinnerAnnouncer", {
     from: deployer,
     args: args,
     log: true,

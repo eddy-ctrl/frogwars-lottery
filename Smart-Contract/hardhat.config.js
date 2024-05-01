@@ -19,7 +19,7 @@ module.exports = {
       chainId: 31337,
       blockConfirmations: 1
     },
-    rinkeby: {
+    linea: {
       url: RINKEBY_RPC_URL,
       accounts: [PRIVATE_KEY],
       chainId: 4,
@@ -28,7 +28,7 @@ module.exports = {
   },
   etherscan: {
     apiKey: {
-        rinkeby: ETHERSCAN_API_KEY,
+        linea: ETHERSCAN_API_KEY,
     },
 },
   gasReporter: {

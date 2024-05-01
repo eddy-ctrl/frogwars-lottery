@@ -18,6 +18,22 @@ const networkConfig = {
     interval: '30'
 
   },
+  // Polygon Mainnet
+  // https://docs.chain.link/vrf/v2/subscription/supported-networks#polygon-matic-mainnet
+  137: {
+    name: "polygon",
+    vrfCoordinatorV2: "0xAE975071Be8F8eE67addBC1A82488F1C24858067",
+    gasLane: "0xcc294a196eeeb44da2888d17c0625cc88d70d9760a69d58d853ba6581a9ab0cd",
+    subscriptionId: "67424379512663932332268623715423188826394628625772023051424377045293146648356",
+    callbackGasLimit: "500000",
+  },
+  // Linea Mainnet
+  59144: {
+    name: "linea",
+    entranceToken: "0x21d624c846725abe1e1e7d662e9fb274999009aa",
+    entranceFee: ethers.utils.parseEther("0.01"),
+    interval: '30'
+  }
 };
 
 const developmentChains = ["hardhat", "localhost"];

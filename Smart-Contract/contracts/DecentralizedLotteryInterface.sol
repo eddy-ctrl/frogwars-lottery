@@ -2,15 +2,10 @@
 
 pragma solidity ^0.8.7;
 
-// Imports
-import "@debridge-finance/debridge-protocol-evm-interfaces/contracts/libraries/Flags.sol";
-import "@debridge-finance/debridge-protocol-evm-interfaces/contracts/interfaces/IDeBridgeGateExtended.sol";
-import "@chainlink/contracts/src/v0.8/interfaces/KeeperCompatibleInterface.sol";
-
-// Custom errors
 // Contract
 interface DecentralizedLotteryInterface {
     enum LotteryState {
+        CLOSED,
         OPEN,
         CALCULATING
     }
@@ -41,7 +36,7 @@ interface DecentralizedLotteryInterface {
     // Functions
 
     // Enter the lottery ticket.
-    function enterLottery() external payable;
+    function enterLottery() external;
 
     // TODO: make sure that the message is received from winner announcer
     function receiveRandomWord(
