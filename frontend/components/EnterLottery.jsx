@@ -87,7 +87,7 @@ export default function EnterLottery() {
   };
 
   useEffect(() => {
-    if (isWeb3Enabled) {
+    if (isWeb3Enabled && lotteryAddress) {
       const getAll = async () => {
         const getFee = (await getEntranceFee()).toString();
         const getNumOfPlayers = (await getNumbersOfPlayers()).toString();
@@ -138,7 +138,7 @@ export default function EnterLottery() {
           </div>
         </div>
       ) : (
-        <div className="text-white text-center">Wallet Not Connected (Connect Using Connect wallet Button in the top right)</div>
+        <div className="text-white text-center">Wallet Not Connected To Linea Mainnet (Connect Using Connect wallet Button in the top right, then switch to Linea Mainnet)</div>
       )}
     </div>
   );
