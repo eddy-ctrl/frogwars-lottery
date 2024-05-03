@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useWeb3Contract, useMoralis } from "react-moralis";
-import { contractAddresses, abi } from "../constants";
+import { contractAddresses, abi, IERC20 } from "../constants";
 import { ethers } from "ethers";
 import { Loading, useNotification } from "web3uikit";
 
@@ -13,19 +13,23 @@ export default function EnterLottery() {
   const [btnLoading, setBtnLoading] = useState(false);
   const [showFullAddress, setShowFullAddress] = useState(true)
 
-  const { chainId: chainIdHex, isWeb3Enabled } = useMoralis();
+  const { chainId: chainIdHex, isWeb3Enabled, account } = useMoralis();
   const dispatch = useNotification();
 
   const chainId = parseInt(chainIdHex);
   const lotteryAddress =
     chainId in contractAddresses ? contractAddresses[chainId][0] : null;
+  const tokenAddress = chainId in contractAddresses ? contractAddresses[chainId][1] : null;
+
+  if (lotteryAddress !== null) {
+    console.log(`Lottery on Scanner: https://lineascan.build/address/${lotteryAddress}#writeContract`);
+  }
 
   const { runContractFunction: enterLottery } = useWeb3Contract({
     abi,
     contractAddress: lotteryAddress,
     functionName: "enterLottery",
     params: {},
-    msgValue: entranceFee,
   });
 
   const {
@@ -60,8 +64,42 @@ export default function EnterLottery() {
     params: {},
   });
 
+  const { runContractFunction: getAllowance } = useWeb3Contract({
+    abi: IERC20,
+    contractAddress: tokenAddress,
+    functionName: "allowance",
+    params: {owner: account, spender: lotteryAddress},
+  });
+
+  const { runContractFunction: approveLottery } = useWeb3Contract({
+    abi: IERC20,
+    contractAddress: tokenAddress,
+    functionName: "approve",
+    params: {spender: lotteryAddress, amount: ethers.utils.parseEther("1000")},
+  });
+
   const handleClick = async () => {
     setBtnLoading(true);
+
+    const allowanceWei = (await getAllowance());
+    const allowance = parseFloat(ethers.utils.formatEther(allowanceWei));
+    const fee = parseFloat(ethers.utils.formatUnits(entranceFee));
+
+    if (allowance < fee) {
+      await approveLottery({
+        onSuccess: async (tx) => {
+          await tx.wait(1);
+          handleNewNotification(tx);
+          await enterLottery({
+            onSuccess: handleSuccess,
+            onError: (error) => console.log(error),
+          });
+        },
+        onError: (error) => console.log(error),
+      });
+      return;
+    }
+
     await enterLottery({
       onSuccess: handleSuccess,
       onError: (error) => console.log(error),
@@ -73,7 +111,9 @@ export default function EnterLottery() {
     await tx.wait(1);
     handleNewNotification(tx);
     setBtnLoading(false);
-    // getAll()
+
+    const getNumOfPlayers = (await getNumbersOfPlayers()).toString();
+    setAllPlayers(getNumOfPlayers);
   };
 
   const handleNewNotification = () => {
@@ -98,6 +138,7 @@ export default function EnterLottery() {
         setRecentWinner(getWinner);
         console.log(`State is: ${getState}. Closed? ${(getState != 1)}`);
         setLotteryNotOpen(getState != 1);
+
       };
       getAll();
     }
