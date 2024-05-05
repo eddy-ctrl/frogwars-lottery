@@ -75,7 +75,7 @@ export default function EnterLottery() {
     abi: IERC20,
     contractAddress: tokenAddress,
     functionName: "approve",
-    params: {spender: lotteryAddress, amount: ethers.utils.parseEther("10")},
+    params: {spender: lotteryAddress, amount: ethers.utils.parseEther("1000")},
   });
 
   const handleClick = async () => {
@@ -148,23 +148,23 @@ export default function EnterLottery() {
     <div className="px-10 py-5">
       {lotteryAddress ? (
         <div className="space-y-5">
-          <p className=" text-[50px] text-blue-500 font-bold text-center space-x-5">
+          <p className=" text-[50px] text-purple-500 font-customFont text-center space-x-5">
             Entrance Fee =
-            <span className="text-green-500 px-5">
+            <span className="text-green-500 font-customFont px-5">
               {entranceFee && ethers.utils.formatUnits(entranceFee, "ether")} CRYSTAL
             </span>
           </p>
-          <p className="text-4xl text-gray-300 font-semibold text-center">Players = <span className="text-blue-500">
+          <p className="text-4xl text-gray-300 font-customFont font-semibold text-center">Players = <span className="text-blue-500">
           {allPlayers && allPlayers}
             </span> </p>
-          <p className="flex items-center gap-x-2 justify-center"> <img className="w-20" src="/images/award-img.png" alt="Winner" /> <span className="text-3xl text-gray-300"> Recent Winner: {recentWinner && !showFullAddress ? recentWinner : recentWinner?.slice(0,6) + "..." + recentWinner?.slice(recentWinner?.length-6)} </span>
+          <p className="flex items-center gap-x-2 justify-center"> <img className="w-20" src="/images/cup.png" alt="Winner" /> <span className="text-3xl font-customFont text-gray-300"> Recent Winner: {recentWinner && !showFullAddress ? recentWinner : recentWinner?.slice(0,6) + "..." + recentWinner?.slice(recentWinner?.length-6)} </span>
            <span>
-            <button className="bg-blue-500 text-white px-3 py-1 rounded-md" onClick={() => setShowFullAddress(!showFullAddress)}>{showFullAddress ? "View" : "Hide"}</button>
+            <button className="bg-purple-500 c text-white px-3 py-1 font-customFont rounded-md" onClick={() => setShowFullAddress(!showFullAddress)}>{showFullAddress ? "View" : "Hide"}</button>
            </span>
           </p>
           <div className="text-center">
             <button
-              className="cursor-pointer mt-12 w-40 h-10 px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700"
+              className="cursor-pointer mt-12 w-40 h-10 px-4 py-2 font-customFont text-white bg-purple-600 rounded-md hover:bg-purple-700"
               disabled={isFetching || isLoading || loading || btnLoading || lotteryNotOpen}
               onClick={handleClick}
             >
@@ -179,7 +179,7 @@ export default function EnterLottery() {
           </div>
         </div>
       ) : (
-        <div className="text-white text-center">Wallet Not Connected To Linea Mainnet (Connect Using Connect wallet Button in the top right, then switch to Linea Mainnet)</div>
+        <div className="text-white text-center font-customFont">Wallet Not Connected To Linea Mainnet (Connect Using Connect wallet Button in the top right, then switch to Linea Mainnet)</div>
       )}
     </div>
   );

@@ -15,7 +15,10 @@
             "value": "#ffffff"
         },
         "shape": {
-            "type": "star",
+            "type": "image",
+            "image": {
+                "src": "/images/Stickers.png"
+            },
             "options": {
                 "sides": 5
             }
@@ -31,7 +34,7 @@
             }
         },
         "size": {
-            "value": 4,
+            "value": 30,
             "random": true,
             "anim": {
                 "enable": false,
