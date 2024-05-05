@@ -11,7 +11,8 @@ export default function EnterLottery() {
   const [allPlayers, setAllPlayers] = useState();
   const [loading, setLoading] = useState(false);
   const [btnLoading, setBtnLoading] = useState(false);
-  const [showFullAddress, setShowFullAddress] = useState(true)
+  const [showFullAddress, setShowFullAddress] = useState(true);
+  const [totalBalance, setTotalBalance] = useState("0.0");
 
   const { chainId: chainIdHex, isWeb3Enabled, account } = useMoralis();
   const dispatch = useNotification();
@@ -78,6 +79,13 @@ export default function EnterLottery() {
     params: {spender: lotteryAddress, amount: ethers.utils.parseEther("1000")},
   });
 
+  const { runContractFunction: getTotalBalance } = useWeb3Contract({
+    abi: IERC20,
+    contractAddress: tokenAddress,
+    functionName: "balanceOf",
+    params: {account: lotteryAddress},
+  });
+
   const handleClick = async () => {
     setBtnLoading(true);
 
@@ -114,6 +122,9 @@ export default function EnterLottery() {
 
     const getNumOfPlayers = (await getNumbersOfPlayers()).toString();
     setAllPlayers(getNumOfPlayers);
+
+    const getBalance = await getTotalBalance();
+    setTotalBalance(ethers.utils.formatEther(getBalance));
   };
 
   const handleNewNotification = () => {
@@ -139,6 +150,8 @@ export default function EnterLottery() {
         console.log(`State is: ${getState}. Closed? ${(getState != 1)}`);
         setLotteryNotOpen(getState != 1);
 
+        const getBalance = await getTotalBalance();
+        setTotalBalance(ethers.utils.formatEther(getBalance));
       };
       getAll();
     }
@@ -148,10 +161,16 @@ export default function EnterLottery() {
     <div className="px-10 py-5">
       {lotteryAddress ? (
         <div className="space-y-5">
-          <p className=" text-[50px] text-blue-500 font-bold text-center space-x-5">
+          <p className=" text-[50px] text-green-500 font-bold text-center space-x-5">
             Entrance Fee =
             <span className="text-green-500 px-5">
               {entranceFee && ethers.utils.formatUnits(entranceFee, "ether")} CRYSTAL
+            </span>
+          </p>
+          <p className=" text-[50px] text-blue-400 font-bold text-center space-x-5">
+            Current Pot =
+            <span className="text-blue-400 px-5">
+              {parseFloat(totalBalance).toFixed(4).toString()} CRYSTAL
             </span>
           </p>
           <p className="text-4xl text-gray-300 font-semibold text-center">Players = <span className="text-blue-500">
