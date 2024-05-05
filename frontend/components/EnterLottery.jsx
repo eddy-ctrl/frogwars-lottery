@@ -49,7 +49,7 @@ export default function EnterLottery() {
     const contract = new ethers.Contract(lotteryAddress, abi, signer);
 
     const transaction = await contract.enterLottery({
-      gasLimit: 2000,
+      gasLimit: 200000,
       gasPrice: gasPrice,
     });
     return transaction;
