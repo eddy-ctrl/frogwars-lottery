@@ -6,7 +6,7 @@ export default function Btn(handleClick, disabled, children, title) {
     <button
       disabled={disabled}
       onClick={handleClick}
-      className="cursor-pointer text-white bg-blue-500 px-4 py-2 rounded-md hover:bg-blue-600"
+      className="cursor-pointer font-customFont text-white bg-blue-500 px-4 py-2 rounded-md hover:bg-blue-600"
     >
       {children}
     </button>
