@@ -94,13 +94,6 @@ export default function EnterLottery() {
     params: {owner: account, spender: lotteryAddress},
   });
 
-  const { runContractFunction: approveLottery } = useWeb3Contract({
-    abi: IERC20,
-    contractAddress: tokenAddress,
-    functionName: "approve",
-    params: {spender: lotteryAddress, amount: ethers.utils.parseEther("1000")},
-  });
-
   const { runContractFunction: getTotalBalance } = useWeb3Contract({
     abi: IERC20,
     contractAddress: tokenAddress,
