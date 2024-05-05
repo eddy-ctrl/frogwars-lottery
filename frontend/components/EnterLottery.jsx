@@ -3,6 +3,7 @@ import { useWeb3Contract, useMoralis } from "react-moralis";
 import { contractAddresses, abi, IERC20 } from "../constants";
 import { ethers } from "ethers";
 import { Loading, useNotification } from "web3uikit";
+import Moralis from "moralis";
 
 export default function EnterLottery() {
   const [entranceFee, setEntranceFee] = useState();
@@ -22,16 +23,37 @@ export default function EnterLottery() {
     chainId in contractAddresses ? contractAddresses[chainId][0] : null;
   const tokenAddress = chainId in contractAddresses ? contractAddresses[chainId][1] : null;
 
-  if (lotteryAddress !== null) {
-    console.log(`Lottery on Scanner: https://lineascan.build/address/${lotteryAddress}#writeContract`);
+  const approveRaw = async function() {
+    const web3Provider = await Moralis.enableWeb3(); // Get ethers.js web3Provider
+    const gasPrice = await web3Provider.getGasPrice();
+
+    const signer = web3Provider.getSigner();
+
+    const contract = new ethers.Contract(tokenAddress, IERC20, signer);
+
+    const transaction = await contract.approve(
+        lotteryAddress,
+        ethers.utils.parseEther("1000"),{
+          gasLimit: 200000,
+          gasPrice: gasPrice,
+    });
+    return transaction;
   }
 
-  const { runContractFunction: enterLottery } = useWeb3Contract({
-    abi,
-    contractAddress: lotteryAddress,
-    functionName: "enterLottery",
-    params: {},
-  });
+  const enterLotteryRaw = async function() {
+    const web3Provider = await Moralis.enableWeb3(); // Get ethers.js web3Provider
+    const gasPrice = await web3Provider.getGasPrice();
+
+    const signer = web3Provider.getSigner();
+
+    const contract = new ethers.Contract(lotteryAddress, abi, signer);
+
+    const transaction = await contract.enterLottery({
+      gasLimit: 2000,
+      gasPrice: gasPrice,
+    });
+    return transaction;
+  }
 
   const {
     runContractFunction: getEntranceFee,
@@ -94,24 +116,25 @@ export default function EnterLottery() {
     const fee = parseFloat(ethers.utils.formatUnits(entranceFee));
 
     if (allowance < fee) {
-      await approveLottery({
-        onSuccess: async (tx) => {
-          await tx.wait(1);
-          handleNewNotification(tx);
-          await enterLottery({
-            onSuccess: handleSuccess,
-            onError: (error) => console.log(error),
-          });
-        },
-        onError: (error) => console.log(error),
-      });
-      return;
+      let approveTx = undefined;
+      try {
+        approveTx = await approveRaw();
+        await approveTx.wait(1);
+        handleNewNotification(approveTx);
+      } catch(error) {
+        console.error(error);
+        return;
+      }
     }
 
-    await enterLottery({
-      onSuccess: handleSuccess,
-      onError: (error) => console.log(error),
-    });
+    let tx = undefined;
+    try {
+      tx = await enterLotteryRaw();
+      await handleSuccess(tx);
+    } catch (error) {
+      console.log(error);
+    }
+
   };
 
   // Notifications
