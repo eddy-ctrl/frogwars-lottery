@@ -3,6 +3,7 @@ import { useWeb3Contract, useMoralis } from "react-moralis";
 import { contractAddresses, abi, IERC20 } from "../constants";
 import { ethers } from "ethers";
 import { Loading, useNotification } from "web3uikit";
+import Moralis from "moralis";
 
 export default function EnterLottery() {
   const [entranceFee, setEntranceFee] = useState();
@@ -11,7 +12,8 @@ export default function EnterLottery() {
   const [allPlayers, setAllPlayers] = useState();
   const [loading, setLoading] = useState(false);
   const [btnLoading, setBtnLoading] = useState(false);
-  const [showFullAddress, setShowFullAddress] = useState(true)
+  const [showFullAddress, setShowFullAddress] = useState(true);
+  const [totalBalance, setTotalBalance] = useState("0.0");
 
   const { chainId: chainIdHex, isWeb3Enabled, account } = useMoralis();
   const dispatch = useNotification();
@@ -21,16 +23,37 @@ export default function EnterLottery() {
     chainId in contractAddresses ? contractAddresses[chainId][0] : null;
   const tokenAddress = chainId in contractAddresses ? contractAddresses[chainId][1] : null;
 
-  if (lotteryAddress !== null) {
-    console.log(`Lottery on Scanner: https://lineascan.build/address/${lotteryAddress}#writeContract`);
+  const approveRaw = async function() {
+    const web3Provider = await Moralis.enableWeb3(); // Get ethers.js web3Provider
+    const gasPrice = await web3Provider.getGasPrice();
+
+    const signer = web3Provider.getSigner();
+
+    const contract = new ethers.Contract(tokenAddress, IERC20, signer);
+
+    const transaction = await contract.approve(
+        lotteryAddress,
+        ethers.utils.parseEther("1000"),{
+          gasLimit: 200000,
+          gasPrice: gasPrice,
+    });
+    return transaction;
   }
 
-  const { runContractFunction: enterLottery } = useWeb3Contract({
-    abi,
-    contractAddress: lotteryAddress,
-    functionName: "enterLottery",
-    params: {},
-  });
+  const enterLotteryRaw = async function() {
+    const web3Provider = await Moralis.enableWeb3(); // Get ethers.js web3Provider
+    const gasPrice = await web3Provider.getGasPrice();
+
+    const signer = web3Provider.getSigner();
+
+    const contract = new ethers.Contract(lotteryAddress, abi, signer);
+
+    const transaction = await contract.enterLottery({
+      gasLimit: 2000,
+      gasPrice: gasPrice,
+    });
+    return transaction;
+  }
 
   const {
     runContractFunction: getEntranceFee,
@@ -71,11 +94,11 @@ export default function EnterLottery() {
     params: {owner: account, spender: lotteryAddress},
   });
 
-  const { runContractFunction: approveLottery } = useWeb3Contract({
+  const { runContractFunction: getTotalBalance } = useWeb3Contract({
     abi: IERC20,
     contractAddress: tokenAddress,
-    functionName: "approve",
-    params: {spender: lotteryAddress, amount: ethers.utils.parseEther("1000")},
+    functionName: "balanceOf",
+    params: {account: lotteryAddress},
   });
 
   const handleClick = async () => {
@@ -86,24 +109,25 @@ export default function EnterLottery() {
     const fee = parseFloat(ethers.utils.formatUnits(entranceFee));
 
     if (allowance < fee) {
-      await approveLottery({
-        onSuccess: async (tx) => {
-          await tx.wait(1);
-          handleNewNotification(tx);
-          await enterLottery({
-            onSuccess: handleSuccess,
-            onError: (error) => console.log(error),
-          });
-        },
-        onError: (error) => console.log(error),
-      });
-      return;
+      let approveTx = undefined;
+      try {
+        approveTx = await approveRaw();
+        await approveTx.wait(1);
+        handleNewNotification(approveTx);
+      } catch(error) {
+        console.error(error);
+        return;
+      }
     }
 
-    await enterLottery({
-      onSuccess: handleSuccess,
-      onError: (error) => console.log(error),
-    });
+    let tx = undefined;
+    try {
+      tx = await enterLotteryRaw();
+      await handleSuccess(tx);
+    } catch (error) {
+      console.log(error);
+    }
+
   };
 
   // Notifications
@@ -114,6 +138,9 @@ export default function EnterLottery() {
 
     const getNumOfPlayers = (await getNumbersOfPlayers()).toString();
     setAllPlayers(getNumOfPlayers);
+
+    const getBalance = await getTotalBalance();
+    setTotalBalance(ethers.utils.formatEther(getBalance));
   };
 
   const handleNewNotification = () => {
@@ -139,6 +166,8 @@ export default function EnterLottery() {
         console.log(`State is: ${getState}. Closed? ${(getState != 1)}`);
         setLotteryNotOpen(getState != 1);
 
+        const getBalance = await getTotalBalance();
+        setTotalBalance(ethers.utils.formatEther(getBalance));
       };
       getAll();
     }
@@ -152,6 +181,12 @@ export default function EnterLottery() {
             Entrance Fee =
             <span className="text-green-500 font-customFont px-5">
               {entranceFee && ethers.utils.formatUnits(entranceFee, "ether")} CRYSTAL
+            </span>
+          </p>
+          <p className=" text-[50px] text-blue-400 font-bold text-center space-x-5">
+            Current Pot =
+            <span className="text-blue-400 px-5">
+              {parseFloat(totalBalance).toFixed(4).toString()} CRYSTAL
             </span>
           </p>
           <p className="text-4xl text-gray-300 font-customFont font-semibold text-center">Players = <span className="text-blue-500">
