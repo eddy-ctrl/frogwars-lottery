@@ -75,7 +75,7 @@ export default function EnterLottery() {
     abi: IERC20,
     contractAddress: tokenAddress,
     functionName: "approve",
-    params: {spender: lotteryAddress, amount: ethers.utils.parseEther("1000")},
+    params: {spender: lotteryAddress, amount: ethers.utils.parseEther("10")},
   });
 
   const handleClick = async () => {
